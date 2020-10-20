@@ -1,0 +1,4 @@
+qr/
+*.swp
+.env
+data.json
