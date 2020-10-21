@@ -11,6 +11,10 @@ import sqlite3
 import subprocess
 import base64
 import os
+import json
+from dotenv import load_dotenv
+load_dotenv()
+
 # construct the argument parser and parse the arguments
 #ap = argparse.ArgumentParser()
 
@@ -35,10 +39,10 @@ def use_refresh_token_for_new_access_token(access_credentials):
 #    data = c.fetchone()
 #    refresh_token = data[2] # refresh_token in position 2
     # Get new access token
-#    baseurl = "https://accounts.spotify.com/api/token"
+    url = "https://accounts.spotify.com/api/token"
     b64encoded_data = base64.b64encode((access_credentials["client_id"] + ":" + access_credentials["client_secret"]).encode("utf-8")).decode("utf-8")
     headers = {"Authorization": "Basic " + b64encoded_data}
-    r = requests.post(baseurl, headers=headers, data={"grant_type": "refresh_token", "refresh_token": access_credentials["refresh_token"]})
+    r = requests.post(url, headers=headers, data={"grant_type": "refresh_token", "refresh_token": access_credentials["refresh_token"]})
 
     token_data = r.json()
     # Update the table
@@ -47,21 +51,11 @@ def use_refresh_token_for_new_access_token(access_credentials):
     # Return new access token
 
     # Return the updated data object
-    access_credentials["access_token"] = token_data["access_token"]
-    return access_credentials
+    #access_credentials["access_token"] = token_data["access_token"]
+    return token_data["access_token"]
 
-def get_user_current_playback(access_credentials):
-    access_token = get_access_token()
-    baseurl = "https://api.spotify.com"
-
-    headers = {"Authorization": "Bearer " + access_token}
-    r = requests.get("https://api.spotify.com/v1/me/player", headers=headers)
-    return r.status_code
-
-status_url = "https://status.spotify.dev/api/v2/status.json"
-me_url = "https://api.spotify.com/v1/me/player"
 def make_song_request(access_credentials, uri):
-    access_credentials = use_refresh_token_for_new_access_token(access_credentials)
+    access_token = use_refresh_token_for_new_access_token(access_credentials)
     # Restart the raspotify daemon
     # This kicks anyone on raspotify off and resets our account on the device 
     # There's probably a better way to do this with librespot directly
@@ -69,7 +63,7 @@ def make_song_request(access_credentials, uri):
     # wait to give the daemon time to restart
     time.sleep(2.0)
 
-    headers = {"Authorization": "Bearer " + access_credentials["access_token"]}
+    headers = {"Authorization": "Bearer " + access_token}
     
     # Do we store the device ID? Probably
     # Always cast to device raspberry pi device (This will kick whoever is on off)
@@ -78,14 +72,12 @@ def make_song_request(access_credentials, uri):
     # How to get device id? Does it change or always the same??
     r_transfer_playback = requests.put("https://api.spotify.com/v1/me/player", headers=headers,
             json={"device_ids":[raspotify_device_id], "play": True})
-    #print("transfer playback response", r_transfer_playback.status_code)
     # Always turn shuffle off
     r_shuffle = requests.put("https://api.spotify.com/v1/me/player/shuffle?state=false", headers=headers)
     
     # Change the album
     baseurl = "https://api.spotify.com/v1/me/player/play"
     r = requests.put(baseurl, headers=headers, json={"context_uri":uri})
-    #print("change request response", r.status_code)
     # assuming everything worked. set current album to uri
     return {"current_album": uri, "frames_with_no_input": 0}
 
@@ -134,17 +126,9 @@ def start_video_stream(access_credentials, frames_pause_threshold = 6, time_betw
 
         # loop over the detected barcodes
         for barcode in barcodes:
-            # extract the bounding box location of the barcode and draw the bounding box surrounding the barcode on the image
-            #(x, y, w, h) = barcode.rect
-            #cv2.rectangle(frame, (x, y), (x+w, y+h), (0,0,255), 2)
-
             # the barcode data is a bytes object
             barcodeData = barcode.data.decode("utf-8")
             barcodeType = barcode.type
-
-            # draw the data and type on the iamge
-            #text = f"{barcodeData} ({barcodeType})"
-            #cv2.putText(frame, text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 2)
 
             if barcodeData != scanner_state["current_album"]:
                 scanner_state = make_song_request(access_credentials, barcodeData)
@@ -156,36 +140,20 @@ def start_video_stream(access_credentials, frames_pause_threshold = 6, time_betw
         if key == ord("q"):
             break
         
-        # Sleep here for two seconds so we aren't spamming. Or wait for keyboard input
+        # Sleep here so we aren't spamming. Or wait for keyboard input
         time.sleep(time_between_scans)
     # close the output CSV and clean-up
     print("[INFO] cleaning up...")
     cv2.destroyAllWindows()
     vs.stop()
 
-
-
-me_url = "https://api.spotify.com/v1/me/player/devices"
-def get_current_playback(access_credentials):
-    access_token = get_access_token(access_credentials)
-    
-    baseurl = "https://api.spotify.com"
-    headers = {"Authorization": "Bearer " + access_token}
-    r = requests.get(me_url, headers=headers)
-    print(r.status_code)
-    #    pass
-    return r.json()
-
-
-
-
 if __name__ == "__main__":
 
     try:
         #args = vars(ap.parse_args())
-        data_file_path = os.environ["DATA_FILE"]
+        data_file_path = os.getenv("DATA_FILE")
         with open(data_file_path) as in_file:
-            access_credentials = json.read(in_file)
+            access_credentials = json.load(in_file)
             start_video_stream(access_credentials)
         # Or fetch from data
 
