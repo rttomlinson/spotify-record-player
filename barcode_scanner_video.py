@@ -70,7 +70,7 @@ def make_song_request(access_credentials, uri):
     # TODO figure out how to manage this device id
     raspotify_device_id = access_credentials["device_id"]
     # How to get device id? Does it change or always the same??
-    r_transfer_playback = requests.put("https://api.spotify.com/v1/me/player", headers=headers, json={"device_ids":[raspotify_device_id], "play": True})
+    r_transfer_playback = requests.put("https://api.spotify.com/v1/me/player", headers=headers, json={"device_ids":[raspotify_device_id], "play": False})
     # Always turn shuffle off
     r_shuffle = requests.put("https://api.spotify.com/v1/me/player/shuffle?state=false", headers=headers)
     
